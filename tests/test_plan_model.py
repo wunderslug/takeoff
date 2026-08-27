@@ -12,6 +12,18 @@ class PlanModelRegressionTests(unittest.TestCase):
         self.assertEqual(_member_role('9 1/2" NI40X @ 16" O.C.', 'ewp_callout'), 'joist')
         self.assertEqual(_member_role('2x10 FLOOR JOISTS @ 16" O.C.', 'conventional_framing_callout'), 'joist')
 
+    def test_common_ewp_product_families_classify_as_joists(self):
+        cases = [
+            '9 1/2" NI40X @ 16" O.C.',
+            '11 7/8" TJI 230 @ 16" O.C.',
+            '11 7/8" BCI 6500-1.7 @ 16" O.C.',
+            'I-JOIST @ 16" O.C.',
+        ]
+        for callout in cases:
+            with self.subTest(callout=callout):
+                self.assertEqual(_category(callout), 'ewp_callout')
+                self.assertEqual(_member_role(callout, 'ewp_callout'), 'joist')
+
     def test_ewp_precedence_keeps_both_sources_and_creates_review_note(self):
         model = {
             'items': [
