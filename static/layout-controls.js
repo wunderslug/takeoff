@@ -8,6 +8,14 @@
   const inspector=document.querySelector('.inspector');
   const inspectorTabs=document.querySelector('.inspector-tabs');
 
+  let sheetApply=null;
+  const setSheetsCollapsed=(collapsed)=>{
+    if(!app)return;
+    localStorage.setItem('takeoff.sheetsCollapsed',collapsed?'1':'0');
+    if(sheetApply)sheetApply();
+    else app.classList.toggle('sheets-collapsed',collapsed);
+  };
+
   if(app&&sheets&&panelBrand&&!document.querySelector('#sheetsCollapse')){
     const btn=document.createElement('button');
     btn.id='sheetsCollapse';
@@ -18,31 +26,26 @@
     btn.textContent='‹';
     panelBrand.appendChild(btn);
 
-    const apply=()=>{
+    sheetApply=()=>{
       const collapsed=localStorage.getItem('takeoff.sheetsCollapsed')==='1';
       app.classList.toggle('sheets-collapsed',collapsed);
       btn.textContent=collapsed?'›':'‹';
       btn.title=collapsed?'Show sheet list':'Hide sheet list';
       btn.setAttribute('aria-label',btn.title);
-      if(collapsed){
-        btn.style.position='fixed';
-        btn.style.left='16px';
-        btn.style.top='74px';
-        btn.style.zIndex='25';
-        btn.style.visibility='visible';
-      }else{
-        btn.style.position='';
-        btn.style.left='';
-        btn.style.top='';
-        btn.style.zIndex='';
+      const railPlans=document.querySelector('.rail-btn[title="Plans"]');
+      if(railPlans){
+        railPlans.classList.toggle('active',!collapsed);
+        railPlans.title=collapsed?'Show sheets':'Hide sheets';
       }
     };
-    btn.addEventListener('click',()=>{
-      const next=!app.classList.contains('sheets-collapsed');
-      localStorage.setItem('takeoff.sheetsCollapsed',next?'1':'0');
-      apply();
-    });
-    apply();
+    btn.addEventListener('click',()=>setSheetsCollapsed(!app.classList.contains('sheets-collapsed')));
+    sheetApply();
+  }
+
+  const railPlans=document.querySelector('.rail-btn[title="Plans"], .rail-btn[title="Show sheets"], .rail-btn[title="Hide sheets"]');
+  if(railPlans&&!railPlans.dataset.sheetToggleBound){
+    railPlans.dataset.sheetToggleBound='1';
+    railPlans.addEventListener('click',()=>setSheetsCollapsed(!app.classList.contains('sheets-collapsed')));
   }
 
   if(drawer&&drawerTop&&!document.querySelector('#drawerToggle')){
