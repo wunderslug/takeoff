@@ -2,10 +2,18 @@ const state={project:null,page:1,zoom:1,activeClar:null,textCache:{}};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
 function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.hidden=true,3200)}
-function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function esc(s){return String(s??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]))}
 function openClarifications(){return state.project?state.project.clarifications.filter(c=>c.status==='open'):[]}
 function blockingClarifications(){return openClarifications().filter(c=>c.blocking)}
 function currentPage(){return state.project?.pages.find(p=>p.page===state.page)||null}
+
+function forceModalClosed(){
+  const modal=$('#modal');
+  if(!modal)return;
+  modal.hidden=true;
+  modal.style.display='none';
+  state.activeClar=null;
+}
 
 async function upload(file){
   if(!file||!file.name.toLowerCase().endsWith('.pdf')){toast('Choose a PDF plan set.');return}
@@ -69,8 +77,20 @@ function renderClarifications(){const p=state.project;if(!p)return;const open=op
   $$('[data-clar]').forEach(el=>el.onclick=()=>openClar(el.dataset.clar));
 }
 
-function openClar(id){const c=state.project.clarifications.find(x=>x.id===id);if(!c)return;state.activeClar=id;$('#modalTitle').textContent=c.title;$('#modalQuestion').textContent=c.question;$('#modalEvidence').textContent=c.evidence;$('#modalAnswer').value='';$('#modal').hidden=false}
-function closeModal(){$('#modal').hidden=true;state.activeClar=null}
+function openClar(id){
+  if(!state.project)return;
+  const c=state.project.clarifications.find(x=>x.id===id);
+  if(!c)return;
+  state.activeClar=id;
+  $('#modalTitle').textContent=c.title;
+  $('#modalQuestion').textContent=c.question;
+  $('#modalEvidence').textContent=c.evidence;
+  $('#modalAnswer').value='';
+  const modal=$('#modal');
+  modal.hidden=false;
+  modal.style.display='grid';
+}
+function closeModal(){forceModalClosed()}
 async function resolveClar(){const answer=$('#modalAnswer').value.trim();if(!answer){toast('Enter the authoritative answer first.');return}const c=state.project.clarifications.find(x=>x.id===state.activeClar);if(!c)return;
   const r=await fetch(`/api/projects/${state.project.id}/clarifications/${c.id}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer})});const d=await r.json();if(!r.ok){toast(d.detail||'Could not save clarification');return}state.project=d;closeModal();renderAll();await showPage(state.page);toast('Clarification saved as a user-approved value.')}
 function updateFinalize(){const n=blockingClarifications().length;$('#finalizeBtn').disabled=!state.project||n>0;$('#drawerMessage').textContent=n?`${n} blocking clarification${n===1?'':'s'} remain. Measurement/takeoff finalization stays locked.`:'All blocking clarifications are resolved. The plan set is ready for the measurement-engine stage.';if(!n&&state.project){$('#phaseClarify').classList.add('done');$('#phaseClarify').classList.remove('active');$('#phaseMeasure').classList.add('active')}}
@@ -86,7 +106,6 @@ $('#analyzeBtn').onclick=()=>{if(!state.project)return;toast(`Plan set read. ${o
 $('#finalizeBtn').onclick=async()=>{if(!state.project)return;const r=await fetch(`/api/projects/${state.project.id}/finalize-check`);const d=await r.json();if(!d.can_finalize){toast(d.message);return}toast('Plan-reading review finalized. Measurement engine is the next stage.')};
 $('#railClar').onclick=()=>{$$('.inspect-tab').forEach(x=>x.classList.toggle('active',x.dataset.tab==='review'));$$('.inspect-pane').forEach(x=>x.classList.toggle('active',x.id==='reviewTab'))};
 
-
 async function resumeFromUrl(){
   const id=new URLSearchParams(location.search).get('project');
   if(!id)return;
@@ -94,4 +113,6 @@ async function resumeFromUrl(){
   try{const r=await fetch(`/api/projects/${id}`);const d=await r.json();if(!r.ok)throw new Error(d.detail||'Project not found');state.project=d;state.page=1;state.zoom=1;$('#projectBlock').hidden=false;$('#analyzeBtn').disabled=false;renderAll();await showPage(1)}
   catch(e){$('#emptyState').hidden=false;toast(e.message)}finally{$('#loadingState').hidden=true}
 }
+
+forceModalClosed();
 resumeFromUrl();
