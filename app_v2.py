@@ -46,9 +46,19 @@ _remove_routes()
 def index_with_plan_model():
     html_path = STATIC / "index.html"
     html = html_path.read_text(encoding="utf-8")
-    addon = '<script src="/static/plan-model-addon.js?v=3"></script>'
-    if "plan-model-addon.js" not in html:
-        html = html.replace("</body>", f"  {addon}\n</body>")
+
+    # Add the readability pass without modifying the base template. Versioned URLs
+    # keep browser caches from serving stale UI during development.
+    if "readability.css" not in html:
+        html = html.replace("</head>", '  <link rel="stylesheet" href="/static/readability.css?v=1" />\n</head>')
+
+    addons = (
+        '  <script src="/static/layout-controls.js?v=1"></script>\n'
+        '  <script src="/static/plan-model-v2.js?v=1"></script>\n'
+    )
+    if "plan-model-v2.js" not in html:
+        html = html.replace("</body>", f"{addons}</body>")
+
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
