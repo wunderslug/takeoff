@@ -55,8 +55,9 @@ def index_with_plan_model():
     addons = (
         '  <script src="/static/layout-controls.js?v=1"></script>\n'
         '  <script src="/static/plan-model-v2.js?v=1"></script>\n'
+        '  <script src="/static/opentakeoff-launcher.js?v=1"></script>\n'
     )
-    if "plan-model-v2.js" not in html:
+    if "opentakeoff-launcher.js" not in html:
         html = html.replace("</body>", f"{addons}</body>")
 
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
