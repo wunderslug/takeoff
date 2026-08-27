@@ -4,15 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Blueprint Takeoff</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260827-3" />
+  <link rel="stylesheet" href="/static/styles.css?v=4" />
 </head>
 <body>
   <div class="app">
     <aside class="rail">
       <div class="logo">BT</div>
       <button class="rail-btn active" title="Plans">▤</button>
-      <button class="rail-btn" title="Clarifications" id="railClar">!</button>
-      <button class="rail-btn" title="Takeoff stage">▥</button>
+      <button class="rail-btn" title="Takeoff">▥</button>
+      <button class="rail-btn" title="Cut plan">✂</button>
       <button class="rail-btn" title="Settings">⚙</button>
       <div class="rail-spacer"></div>
       <div class="rule-dot" title="Never invent or assume"></div>
@@ -20,10 +20,8 @@
 
     <aside class="sheets-panel">
       <div class="panel-brand">
-        <div>
-          <strong>Blueprint Takeoff</strong>
-          <small>Lumber + framing</small>
-        </div>
+        <strong>Blueprint Takeoff</strong>
+        <small>Lumber + framing</small>
       </div>
 
       <button class="upload-primary" id="uploadPrimary">+ Upload plan set</button>
@@ -31,13 +29,11 @@
 
       <div class="project-block" id="projectBlock" hidden>
         <small>PROJECT</small>
-        <strong id="projectName">-</strong>
-        <span id="projectMeta">-</span>
+        <strong id="projectName">—</strong>
+        <span id="projectMeta">—</span>
       </div>
 
-      <div class="sheet-head">
-        <span>SHEETS</span><span id="sheetCounter">0</span>
-      </div>
+      <div class="sheet-head"><span>SHEETS</span><span id="sheetCounter">0</span></div>
       <div id="sheetList" class="sheet-list">
         <div class="empty-small">Upload a blueprint PDF to populate sheets.</div>
       </div>
@@ -45,13 +41,11 @@
 
     <main class="workspace">
       <header class="topbar">
-        <div class="top-left">
-          <div class="sheet-title-wrap">
-            <span id="currentSheetNumber" class="sheet-chip">NO PLAN</span>
-            <div>
-              <strong id="currentSheetTitle">Upload a blueprint PDF</strong>
-              <small id="currentSheetSub">The app will not fabricate missing sheet data.</small>
-            </div>
+        <div class="sheet-title-wrap">
+          <span id="currentSheetNumber" class="sheet-chip">NO PLAN</span>
+          <div>
+            <strong id="currentSheetTitle">Upload a blueprint PDF</strong>
+            <small id="currentSheetSub">Written dimensions control. Missing information is never guessed.</small>
           </div>
         </div>
         <div class="actions">
@@ -63,7 +57,11 @@
 
       <div class="never-banner">
         <span class="never-icon">!</span>
-        <div><strong>Never invent or assume.</strong> Any value that affects an order must come from the drawings or an explicit user-approved clarification.</div>
+        <div>
+          <strong>Never invent or assume.</strong>
+          Order-impacting values must come from the plans or an explicit user answer.
+          <span class="policy-chip">EWP overrides conflicting conventional framing — conflict stays flagged.</span>
+        </div>
       </div>
 
       <section class="content-grid">
@@ -86,13 +84,13 @@
             <div class="drop-card" id="emptyState">
               <div class="drop-icon">⇧</div>
               <h2>Drop a blueprint PDF here</h2>
-              <p>Pages are rendered and text is extracted on your own server. Nothing is guessed when a sheet, scale, note, or reference cannot be confirmed.</p>
+              <p>Sheets are rendered on your server. The review layer reads plan metadata first; material output is only shown when the takeoff is verified.</p>
               <button class="btn coral" id="chooseFile">Choose PDF</button>
             </div>
             <div id="loadingState" class="loading-state" hidden>
               <div class="spinner"></div>
               <strong id="loadingTitle">Reading plan set…</strong>
-              <span id="loadingText">Rendering sheets and extracting blueprint text.</span>
+              <span id="loadingText">Rendering sheets and checking plan information.</span>
             </div>
             <div id="imageStage" class="image-stage" hidden>
               <img id="planImage" alt="Blueprint sheet" />
@@ -103,8 +101,10 @@
         <aside class="inspector">
           <div class="inspector-tabs">
             <button class="inspect-tab active" data-tab="review">Review</button>
-            <button class="inspect-tab" data-tab="text">Sheet Text</button>
-            <button class="inspect-tab" data-tab="info">Sheet Info</button>
+            <button class="inspect-tab" data-tab="takeoff">Takeoff</button>
+            <button class="inspect-tab" data-tab="cuts">Cut Plan</button>
+            <button class="inspect-tab" data-tab="special">Special</button>
+            <button class="inspect-tab" data-tab="text">Text</button>
           </div>
 
           <div class="inspector-body">
@@ -116,20 +116,32 @@
               </div>
 
               <div class="section-header">
-                <strong>Clarifications</strong>
-                <span id="clarificationLabel">None</span>
+                <strong>Clarifications</strong><span id="clarificationLabel">None</span>
               </div>
               <div id="clarificationList" class="clar-list">
-                <div class="empty-small">Clarifications appear here only when information cannot be confirmed.</div>
+                <div class="empty-small">Clarifications appear only when information cannot be confirmed.</div>
               </div>
 
               <div class="section-header review-hits-head">
-                <strong>Relevant plan text</strong>
-                <span>Not interpreted yet</span>
+                <strong>Relevant plan text</strong><span>Source review</span>
               </div>
               <div id="reviewHits" class="review-hits">
-                <div class="empty-small">Upload a plan to inspect notes, schedules, engineered lumber terms, exclusions, and framing callouts.</div>
+                <div class="empty-small">Upload a plan to inspect notes and callouts.</div>
               </div>
+            </div>
+
+            <div id="takeoffTab" class="inspect-pane">
+              <div id="takeoffPanel">
+                <div class="empty-big"><strong>No material takeoff loaded</strong><span>Upload a verified plan set.</span></div>
+              </div>
+            </div>
+
+            <div id="cutsTab" class="inspect-pane">
+              <div id="cutsPanel"><div class="empty-big"><strong>No cut plan yet</strong></div></div>
+            </div>
+
+            <div id="specialTab" class="inspect-pane">
+              <div id="specialPanel"><div class="empty-big"><strong>No special-order package yet</strong></div></div>
             </div>
 
             <div id="textTab" class="inspect-pane">
@@ -139,12 +151,6 @@
               </div>
               <pre id="sheetText">No sheet loaded.</pre>
             </div>
-
-            <div id="infoTab" class="inspect-pane">
-              <div id="sheetInfo" class="info-grid">
-                <div class="empty-small">No sheet loaded.</div>
-              </div>
-            </div>
           </div>
         </aside>
       </section>
@@ -152,34 +158,34 @@
       <section class="bottom-drawer">
         <div class="drawer-top">
           <div>
-            <strong>Plan-set analysis</strong>
+            <strong id="drawerTitle">Plan-set analysis</strong>
             <span id="analysisStatus">Waiting for a PDF</span>
           </div>
           <div class="phase-pills">
             <span class="phase active" id="phaseUpload">1 Upload</span>
             <span class="phase" id="phaseRead">2 Read</span>
             <span class="phase" id="phaseClarify">3 Clarify</span>
-            <span class="phase" id="phaseMeasure">4 Measure</span>
+            <span class="phase" id="phaseTakeoff">4 Takeoff</span>
           </div>
         </div>
         <div class="drawer-grid">
           <div class="drawer-card"><small>Text-readable sheets</small><strong id="textPages">0</strong></div>
-          <div class="drawer-card"><small>Image-only sheets</small><strong id="imagePages">0</strong></div>
           <div class="drawer-card"><small>Review text hits</small><strong id="hitCount">0</strong></div>
-          <div class="drawer-card"><small>Missing referenced sheets</small><strong id="missingRefCount">0</strong></div>
-          <div class="drawer-message" id="drawerMessage">Actual material quantities remain disabled until the plan-reading and clarification stage is complete.</div>
+          <div class="drawer-card"><small>Material packages</small><strong id="packageCount">0</strong></div>
+          <div class="drawer-card"><small>Takeoff blockers</small><strong id="takeoffBlockers">0</strong></div>
+          <div class="drawer-message" id="drawerMessage">Actual material quantities remain locked until a verified takeoff is available.</div>
         </div>
       </section>
     </main>
   </div>
 
-  <div id="modal" class="modal-wrap" hidden style="display:none">
+  <div id="modal" class="modal-wrap" style="display:none">
     <div class="modal">
       <button class="modal-x" id="modalClose">×</button>
       <div class="modal-kicker">CLARIFICATION REQUIRED</div>
-      <h2 id="modalTitle">-</h2>
-      <p id="modalQuestion">-</p>
-      <div class="evidence" id="modalEvidence">-</div>
+      <h2 id="modalTitle"></h2>
+      <p id="modalQuestion"></p>
+      <div class="evidence" id="modalEvidence"></div>
       <label for="modalAnswer">Authoritative answer</label>
       <textarea id="modalAnswer" placeholder="Enter exactly what should be used. Do not guess."></textarea>
       <div class="modal-actions">
@@ -190,6 +196,6 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script src="/static/app.js?v=20260827-3"></script>
+  <script src="/static/app.js?v=4"></script>
 </body>
 </html>
