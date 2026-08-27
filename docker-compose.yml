@@ -7,3 +7,14 @@ services:
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+
+  opentakeoff:
+    build:
+      context: .
+      dockerfile: Dockerfile.opentakeoff
+      args:
+        OPENTAKEOFF_REF: 52be241e485e819db31085ff9243e46d87127e0d
+    container_name: opentakeoff
+    ports:
+      - "3016:80"
+    restart: unless-stopped
