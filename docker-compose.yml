@@ -1,0 +1,9 @@
+services:
+  blueprint-takeoff:
+    build: .
+    container_name: blueprint-takeoff
+    ports:
+      - "3015:3015"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
