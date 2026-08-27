@@ -4,4 +4,4 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 EXPOSE 3015
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "3015"]
+CMD ["uvicorn", "app_v2:app", "--host", "0.0.0.0", "--port", "3015"]
