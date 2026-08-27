@@ -8,7 +8,7 @@ from typing import Any
 
 import fitz  # PyMuPDF
 
-MODEL_VERSION = 1
+MODEL_VERSION = 2
 
 EWP_RE = re.compile(
     r"\b(?:I[- ]?JOISTS?|TJI\s*\d*[A-Z0-9-]*|BCI\s*\d*[A-Z0-9-]*|NI\s*\d+[A-Z0-9-]*|LVL|PSL|LSL|GLULAM|RIM\s+BOARD|EWP)\b",
@@ -117,6 +117,34 @@ def _scope_for(raw: str, sheet_title: str | None) -> str:
     return "unspecified"
 
 
+def _member_role(raw: str, category: str) -> str:
+    up = raw.upper()
+    if "TRUSS" in up:
+        return "truss"
+    if "RIM BOARD" in up:
+        return "rim"
+    if "HEADER" in up:
+        return "header"
+    if "BEAM" in up or "GLULAM" in up:
+        return "beam"
+    if "POST" in up:
+        return "post"
+    if "RAFTER" in up:
+        return "rafter"
+    if "STUD" in up:
+        return "stud"
+    if "PLATE" in up:
+        return "plate"
+    if "JOIST" in up:
+        return "joist"
+    # Common I-joist product families can be identified as joist products from the explicit token itself.
+    if category == "ewp_callout" and re.search(r"\b(?:TJI|BCI|NI\s*\d+)\b", up):
+        return "joist"
+    if "LVL" in up or "PSL" in up or "LSL" in up:
+        return "engineered_member_unspecified"
+    return "unspecified"
+
+
 def _category(raw: str) -> str | None:
     if SCOPE_RE.search(raw):
         return "scope_or_verification_note"
@@ -142,6 +170,7 @@ def _category(raw: str) -> str | None:
 def _normalized(raw: str, category: str, sheet_title: str | None) -> dict[str, Any]:
     result: dict[str, Any] = {
         "scope": _scope_for(raw, sheet_title),
+        "member_role": _member_role(raw, category),
         "dimensions": _dimensions(raw),
     }
     spacing = SPACING_RE.search(raw)
@@ -189,17 +218,21 @@ def _line_records(page: fitz.Page) -> list[dict[str, Any]]:
 
 def _apply_precedence(model: dict[str, Any]) -> None:
     items = model["items"]
-    by_scope: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    grouped: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = {}
+    comparable_roles = {"joist", "beam", "header", "post", "rafter", "stud", "plate"}
     for item in items:
-        scope = item["normalized"].get("scope", "unspecified")
-        by_scope.setdefault(scope, {}).setdefault(item["category"], []).append(item)
+        normalized = item.get("normalized", {})
+        scope = normalized.get("scope", "unspecified")
+        role = normalized.get("member_role", "unspecified")
+        if scope == "unspecified" or role not in comparable_roles:
+            continue
+        grouped.setdefault((scope, role), {}).setdefault(item["category"], []).append(item)
 
-    for scope, groups in by_scope.items():
+    for (scope, role), groups in grouped.items():
         ewps = groups.get("ewp_callout", [])
         conventional = groups.get("conventional_framing_callout", [])
-        if not ewps or not conventional or scope == "unspecified":
+        if not ewps or not conventional:
             continue
-        # This is a precedence policy, not a structural substitution. The raw evidence remains visible.
         conflict_id = f"conflict-{len(model['conflicts']) + 1:04d}"
         for item in ewps:
             item["governing_status"] = "governing_by_ewp_policy"
@@ -213,9 +246,10 @@ def _apply_precedence(model: dict[str, Any]) -> None:
             "id": conflict_id,
             "type": "ewp_vs_conventional",
             "scope": scope,
+            "member_role": role,
             "blocking": False,
             "status": "review_note",
-            "policy": "EWP specifications govern when they conflict with conventional framing notes. Preserve the conflict for review.",
+            "policy": "EWP specifications govern when they conflict with a conventional framing note for the same framing role. Preserve both sources for review.",
             "governing_item_ids": [x["id"] for x in ewps],
             "review_item_ids": [x["id"] for x in conventional],
         })
@@ -233,7 +267,7 @@ def build_plan_model(pdf_path: Path, project: dict[str, Any]) -> dict[str, Any]:
         "policy": {
             "never_invent": True,
             "order_affecting_values": "must be explicitly supported by the plan or user-approved",
-            "ewp_precedence": "EWP specifications override conflicting conventional framing notes; the conflict remains a review note.",
+            "ewp_precedence": "EWP specifications override conflicting conventional framing notes for the same framing role; the conflict remains a review note.",
         },
         "items": [],
         "conflicts": [],
@@ -267,7 +301,6 @@ def build_plan_model(pdf_path: Path, project: dict[str, Any]) -> dict[str, Any]:
                 "conflict_ids": [],
             })
 
-        # Sheet metadata itself is a plan-model item because later logic depends on it.
         for scale in meta.get("scales", []):
             model["items"].append({
                 "id": f"pm-{idx + 1:03d}-scale-{len(model['items']) + 1}",
@@ -278,7 +311,7 @@ def build_plan_model(pdf_path: Path, project: dict[str, Any]) -> dict[str, Any]:
                 "source_type": "parsed_sheet_metadata",
                 "raw_text": scale,
                 "category": "sheet_scale",
-                "normalized": {"scale": scale, "scope": "sheet"},
+                "normalized": {"scale": scale, "scope": "sheet", "member_role": "not_applicable"},
                 "interpretation_status": "text_supported",
                 "governing_status": "source_supported",
                 "review_status": "not_reviewed",
