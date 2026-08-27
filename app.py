@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import fitz  # PyMuPDF
+import pymupdf
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -186,7 +186,7 @@ def add_clarification(
 
 def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, Any]:
     pdf_sha256 = sha256_file(pdf_path)
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     verified = verified_takeoff_for_sha256(pdf_sha256)
     project: dict[str, Any] = {
         "id": project_id,
@@ -228,9 +228,9 @@ def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, 
         scales = detect_scales(text)
         review_hits = collect_review_hits(lines)
 
-        preview_pix = page.get_pixmap(matrix=fitz.Matrix(1.35, 1.35), alpha=False)
+        preview_pix = page.get_pixmap(matrix=pymupdf.Matrix(1.35, 1.35), alpha=False)
         preview_pix.save(previews / f"page-{idx+1}.png")
-        thumb_pix = page.get_pixmap(matrix=fitz.Matrix(0.28, 0.28), alpha=False)
+        thumb_pix = page.get_pixmap(matrix=pymupdf.Matrix(0.28, 0.28), alpha=False)
         thumb_pix.save(thumbs / f"page-{idx+1}.png")
 
         width_pt, height_pt = page.rect.width, page.rect.height
