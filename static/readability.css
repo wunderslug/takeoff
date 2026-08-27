@@ -1,0 +1,87 @@
+/* Readability pass: larger type, less always-visible chrome, collapsible secondary panels. */
+
+:root{
+  --ui-font:12px;
+  --ui-small:11px;
+  --ui-tiny:10px;
+}
+
+/* Give the review panel enough room to use readable type. */
+.content-grid{grid-template-columns:minmax(0,1fr) 390px}
+
+/* Global UI type bumps. */
+.panel-brand strong{font-size:17px}
+.panel-brand small{font-size:11px}
+.upload-primary{font-size:12px;padding:11px 13px}
+.project-block small{font-size:10px}
+.project-block strong{font-size:13px}
+.project-block span{font-size:10px}
+.sheet-head{font-size:10px}
+.sheet-card b{font-size:11px}
+.sheet-card span{font-size:10px}
+.sheet-card small{font-size:9px}
+
+.sheet-title-wrap strong{font-size:15px}
+.sheet-title-wrap small{font-size:11px}
+.sheet-chip{font-size:11px}
+.btn{font-size:12px;padding:10px 13px}
+.never-banner{font-size:11px;line-height:1.45}
+.viewer-tools{font-size:11px}
+
+.inspect-tab{font-size:12px;padding:0 12px}
+.stat small{font-size:10px}
+.stat strong{font-size:19px}
+.section-header strong{font-size:12px}
+.section-header span{font-size:10px}
+.clar-card b{font-size:12px}
+.clar-card p{font-size:11px;line-height:1.5}
+.clar-meta{font-size:10px}
+.resolved-card b{font-size:12px}
+.resolved-card p{font-size:10.5px}
+.hit b{font-size:10px}
+.hit p{font-size:10.5px;line-height:1.5}
+.text-toolbar strong{font-size:12px}
+.mini-btn{font-size:10.5px;padding:6px 9px}
+pre{font-size:10.5px;line-height:1.55}
+.info-row small{font-size:10px}
+.info-row strong{font-size:11.5px}
+
+.drawer-top strong{font-size:12px}
+.drawer-top span{font-size:10px}
+.phase{font-size:9.5px!important}
+.drawer-card small{font-size:9px}
+.drawer-card strong{font-size:17px}
+.drawer-message{font-size:10px}
+
+/* Collapsible sheets panel. */
+.panel-brand{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.panel-collapse-btn{width:28px;height:28px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#627083;font-weight:900;font-size:15px;display:grid;place-items:center;flex:0 0 auto}
+.panel-collapse-btn:hover{background:#f3f6f8}
+.app.sheets-collapsed{grid-template-columns:60px 0 minmax(0,1fr)}
+.app.sheets-collapsed .sheets-panel{visibility:hidden;overflow:hidden;padding:0;border:0}
+
+/* Bottom analysis drawer is compact by default. */
+.bottom-drawer{transition:max-height .18s ease}
+.bottom-drawer.collapsed{height:46px;min-height:46px}
+.bottom-drawer.collapsed .drawer-grid{display:none}
+.drawer-toggle{border:1px solid var(--line);background:#fff;color:#536071;border-radius:7px;padding:5px 8px;font-size:10px;font-weight:800;margin-left:8px}
+.drawer-toggle:hover{background:#f4f6f8}
+
+/* Inspector can be hidden when the user needs maximum drawing space. */
+.inspector-collapse-btn{margin-left:auto;border:0;background:transparent;color:#657385;font-size:16px;font-weight:900;width:30px}
+.content-grid.inspector-collapsed{grid-template-columns:minmax(0,1fr) 38px}
+.content-grid.inspector-collapsed .inspector{overflow:hidden}
+.content-grid.inspector-collapsed .inspector-tabs{padding:0;display:flex;align-items:center;justify-content:center}
+.content-grid.inspector-collapsed .inspect-tab{display:none}
+.content-grid.inspector-collapsed .inspector-body{display:none}
+.content-grid.inspector-collapsed .inspector-collapse-btn{display:block;transform:rotate(180deg)}
+
+/* Mobile/tablet fallback. */
+@media(max-width:1180px){
+  .content-grid{grid-template-columns:minmax(0,1fr) 350px}
+}
+@media(max-width:980px){
+  .content-grid{grid-template-columns:1fr}
+  .inspector{min-height:380px}
+  .inspector-collapse-btn{display:none}
+}
