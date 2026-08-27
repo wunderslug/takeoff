@@ -1,0 +1,23 @@
+# OpenTakeoff measurement engine, pinned for reproducible regression testing.
+# Upstream: https://github.com/Kentucky-ai/opentakeoff (Apache-2.0)
+
+FROM node:24-bookworm-slim AS build
+
+ARG OPENTAKEOFF_REF=52be241e485e819db31085ff9243e46d87127e0d
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/Kentucky-ai/opentakeoff.git /src/opentakeoff \
+    && cd /src/opentakeoff \
+    && git checkout "$OPENTAKEOFF_REF"
+
+WORKDIR /src/opentakeoff/web
+RUN npm ci
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY opentakeoff-nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /src/opentakeoff/web/dist/ /usr/share/nginx/html/
+EXPOSE 80
