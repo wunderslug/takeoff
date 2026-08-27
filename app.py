@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -13,6 +14,8 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from verified_takeoffs import verified_takeoff_for_sha256
 
 BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
@@ -58,6 +61,14 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def project_dir(project_id: str) -> Path:
     p = DATA / project_id
     if not p.exists():
@@ -83,7 +94,6 @@ def normalize_sheet_number(value: str) -> str:
 
 def detect_sheet_number(lines: list[str]) -> tuple[str | None, list[str]]:
     candidates: list[str] = []
-    # Title blocks tend to be near the end of extracted text. Prefer that region.
     regions = [lines[-80:], lines]
     for region in regions:
         for line in region:
@@ -92,7 +102,6 @@ def detect_sheet_number(lines: list[str]) -> tuple[str | None, list[str]]:
                 continue
             for m in SHEET_RE.finditer(text):
                 cand = normalize_sheet_number(m.group(1))
-                # Avoid obvious dimension-like false positives and revision dates.
                 if re.fullmatch(r"[A-Z]{1,3}\d{1,3}(?:\.\d{1,3})?", cand):
                     if cand not in candidates:
                         candidates.append(cand)
@@ -156,7 +165,10 @@ def collect_review_hits(lines: list[str]) -> list[dict[str, str]]:
     return hits
 
 
-def add_clarification(project: dict[str, Any], *, page: int | None, kind: str, title: str, question: str, evidence: str, blocking: bool = True) -> None:
+def add_clarification(
+    project: dict[str, Any], *, page: int | None, kind: str, title: str,
+    question: str, evidence: str, blocking: bool = True
+) -> None:
     clar_id = f"c-{len(project['clarifications'])+1:04d}"
     project["clarifications"].append({
         "id": clar_id,
@@ -173,11 +185,16 @@ def add_clarification(project: dict[str, Any], *, page: int | None, kind: str, t
 
 
 def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, Any]:
+    pdf_sha256 = sha256_file(pdf_path)
     doc = fitz.open(pdf_path)
+    verified = verified_takeoff_for_sha256(pdf_sha256)
     project: dict[str, Any] = {
         "id": project_id,
         "name": Path(original_name).stem,
         "filename": original_name,
+        "sha256": pdf_sha256,
+        "verified_takeoff_available": bool(verified),
+        "takeoff_answers": {},
         "created_at": now_iso(),
         "updated_at": now_iso(),
         "page_count": doc.page_count,
@@ -192,6 +209,7 @@ def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, 
             "review_hit_count": 0,
             "known_sheet_numbers": [],
             "rule": "Never invent or assume. Any value affecting an order must be supported by the plans or explicitly approved by the user.",
+            "ewp_precedence": "EWP specifications override conflicting conventional framing notes, with the conflict retained for review.",
         },
     }
 
@@ -210,7 +228,6 @@ def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, 
         scales = detect_scales(text)
         review_hits = collect_review_hits(lines)
 
-        # Render readable preview and compact thumbnail.
         preview_pix = page.get_pixmap(matrix=fitz.Matrix(1.35, 1.35), alpha=False)
         preview_pix.save(previews / f"page-{idx+1}.png")
         thumb_pix = page.get_pixmap(matrix=fitz.Matrix(0.28, 0.28), alpha=False)
@@ -261,7 +278,6 @@ def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, 
                 blocking=False,
             )
 
-        # A scale is required before geometry-based measurement. We do not guess it.
         if not scales and (title and any(k in title.upper() for k in ["PLAN", "ELEVATION", "SECTION", "DETAIL"])):
             add_clarification(
                 project, page=idx+1, kind="scale", title=f"{sheet_no or f'Page {idx+1}'}: scale not detected",
@@ -274,7 +290,6 @@ def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, 
     known_sheets = sorted({p["sheet_number"] for p in project["pages"] if p["sheet_number"]})
     project["analysis"]["known_sheet_numbers"] = known_sheets
 
-    # Cross-reference scan after the sheet list is known.
     known_set = set(known_sheets)
     missing: dict[str, set[int]] = {}
     for p in project["pages"]:
@@ -299,15 +314,50 @@ def parse_pdf(pdf_path: Path, project_id: str, original_name: str) -> dict[str, 
             evidence=f"The plan set contains references to {ref_sheet} from page(s) {', '.join(map(str, sorted(pages)))} but no loaded sheet was confidently identified as {ref_sheet}.",
         )
 
-    # Surface explicit scope/verification notes without interpreting them.
     for p in project["pages"]:
         for hit in p["review_hits"]:
             if hit["term"] in [x.strip() for x in BLOCKING_SCOPE_TERMS]:
-                # Review note only; not every FIELD VERIFY note changes the order, so do not fabricate a question.
                 pass
 
     doc.close()
     return project
+
+
+def takeoff_for_project(project: dict[str, Any]) -> dict[str, Any] | None:
+    sha = project.get("sha256")
+    if not sha:
+        source = project_dir(project["id"]) / "source.pdf"
+        if source.exists():
+            sha = sha256_file(source)
+            project["sha256"] = sha
+            project["verified_takeoff_available"] = bool(verified_takeoff_for_sha256(sha))
+            save_project(project)
+    takeoff = verified_takeoff_for_sha256(sha or "")
+    if not takeoff:
+        return None
+
+    answers = project.get("takeoff_answers", {})
+    for q in takeoff.get("blocking_questions", []):
+        if q["id"] in answers:
+            q["status"] = "resolved"
+            q["answer"] = answers[q["id"]]
+        else:
+            q["status"] = "open"
+
+    stair_answer = answers.get("ls-ewp-stair-header-lengths")
+    if stair_answer:
+        for pkg in takeoff["packages"]:
+            for item in pkg.get("materials", []):
+                if item.get("item") == "EWP-LVL-04":
+                    item["length"] = stair_answer
+                    item["status"] = "USER APPROVED"
+        for item in takeoff["ewp_cut_schedule"]:
+            if item.get("location", "").startswith("Stair headers"):
+                item["length"] = stair_answer
+                item["location"] = "Stair headers — user approved"
+
+    takeoff["open_blocking_count"] = sum(1 for q in takeoff.get("blocking_questions", []) if q.get("status") != "resolved")
+    return takeoff
 
 
 @app.get("/")
@@ -346,8 +396,21 @@ async def upload_project(file: UploadFile = File(...)):
         raise HTTPException(422, f"Could not read this PDF: {exc}") from exc
 
 
+@app.get("/api/projects/latest")
+def latest_project():
+    files = list(DATA.glob("*/project.json"))
+    if not files:
+        raise HTTPException(404, "No saved projects")
+    latest = max(files, key=lambda x: x.stat().st_mtime)
+    project = json.loads(latest.read_text(encoding="utf-8"))
+    takeoff_for_project(project)
+    return load_project(project["id"])
+
+
 @app.get("/api/projects/{project_id}")
 def get_project(project_id: str):
+    project = load_project(project_id)
+    takeoff_for_project(project)
     return load_project(project_id)
 
 
@@ -358,6 +421,36 @@ def get_page_text(project_id: str, page_num: int):
     if not path.exists():
         raise HTTPException(404, "Page text not found")
     return {"page": page_num, "text": path.read_text(encoding="utf-8")}
+
+
+@app.get("/api/projects/{project_id}/takeoff")
+def get_takeoff(project_id: str):
+    project = load_project(project_id)
+    takeoff = takeoff_for_project(project)
+    if not takeoff:
+        raise HTTPException(
+            409,
+            "No verified material takeoff is available for this plan yet. The reading/review layer is available, but geometry/material extraction has not been verified for this set."
+        )
+    return takeoff
+
+
+@app.post("/api/projects/{project_id}/takeoff/questions/{question_id}/resolve")
+def resolve_takeoff_question(project_id: str, question_id: str, body: ResolveBody):
+    answer = body.answer.strip()
+    if not answer:
+        raise HTTPException(400, "A user-approved answer is required")
+    project = load_project(project_id)
+    takeoff = takeoff_for_project(project)
+    if not takeoff:
+        raise HTTPException(409, "No verified takeoff is available for this plan")
+    question = next((q for q in takeoff.get("blocking_questions", []) if q["id"] == question_id), None)
+    if not question:
+        raise HTTPException(404, "Takeoff question not found")
+    project.setdefault("takeoff_answers", {})[question_id] = answer
+    project["updated_at"] = now_iso()
+    save_project(project)
+    return takeoff_for_project(project)
 
 
 @app.post("/api/projects/{project_id}/clarifications/{clarification_id}/resolve")
@@ -373,7 +466,6 @@ def resolve_clarification(project_id: str, clarification_id: str, body: ResolveB
     item["answer"] = answer
     item["resolved_at"] = now_iso()
 
-    # Apply only explicit metadata clarifications. No inference.
     if item.get("page"):
         page = next((p for p in project["pages"] if p["page"] == item["page"]), None)
         if page:
@@ -407,8 +499,19 @@ def reopen_clarification(project_id: str, clarification_id: str):
 def finalize_check(project_id: str):
     project = load_project(project_id)
     blocking_open = [c for c in project["clarifications"] if c["blocking"] and c["status"] == "open"]
+    takeoff = takeoff_for_project(project)
+    takeoff_blocking = []
+    if takeoff:
+        takeoff_blocking = [q for q in takeoff.get("blocking_questions", []) if q.get("status") != "resolved"]
+
+    can_finalize = len(blocking_open) == 0 and len(takeoff_blocking) == 0
     return {
-        "can_finalize": len(blocking_open) == 0,
+        "can_finalize": can_finalize,
         "blocking_open": blocking_open,
-        "message": "Ready for the next takeoff stage" if not blocking_open else "Resolve every blocking clarification before takeoff calculations can be finalized.",
+        "takeoff_blocking_open": takeoff_blocking,
+        "message": (
+            "Ready for the next takeoff stage"
+            if can_finalize
+            else "Resolve every blocking plan-reading and takeoff clarification before finalization."
+        ),
     }
