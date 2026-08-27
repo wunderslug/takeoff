@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blueprint Takeoff</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="rail">
+      <div class="logo">BT</div>
+      <button class="rail-btn active" title="Plans">▤</button>
+      <button class="rail-btn" title="Clarifications" id="railClar">!</button>
+      <button class="rail-btn" title="Takeoff stage">▥</button>
+      <button class="rail-btn" title="Settings">⚙</button>
+      <div class="rail-spacer"></div>
+      <div class="rule-dot" title="Never invent or assume"></div>
+    </aside>
+
+    <aside class="sheets-panel">
+      <div class="panel-brand">
+        <div>
+          <strong>Blueprint Takeoff</strong>
+          <small>Lumber + framing</small>
+        </div>
+      </div>
+
+      <button class="upload-primary" id="uploadPrimary">+ Upload plan set</button>
+      <input type="file" id="fileInput" accept="application/pdf" hidden />
+
+      <div class="project-block" id="projectBlock" hidden>
+        <small>PROJECT</small>
+        <strong id="projectName">-</strong>
+        <span id="projectMeta">-</span>
+      </div>
+
+      <div class="sheet-head">
+        <span>SHEETS</span><span id="sheetCounter">0</span>
+      </div>
+      <div id="sheetList" class="sheet-list">
+        <div class="empty-small">Upload a blueprint PDF to populate sheets.</div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="top-left">
+          <div class="sheet-title-wrap">
+            <span id="currentSheetNumber" class="sheet-chip">NO PLAN</span>
+            <div>
+              <strong id="currentSheetTitle">Upload a blueprint PDF</strong>
+              <small id="currentSheetSub">The app will not fabricate missing sheet data.</small>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn light" id="uploadTop">Upload PDF</button>
+          <button class="btn coral" id="analyzeBtn" disabled>Analyze Plan Set</button>
+          <button class="btn navy" id="finalizeBtn" disabled>Finalize Review</button>
+        </div>
+      </header>
+
+      <div class="never-banner">
+        <span class="never-icon">!</span>
+        <div><strong>Never invent or assume.</strong> Any value that affects an order must come from the drawings or an explicit user-approved clarification.</div>
+      </div>
+
+      <section class="content-grid">
+        <div class="plan-area">
+          <div class="viewer-toolbar">
+            <div class="viewer-tools">
+              <button class="icon-btn" id="prevPage" disabled>←</button>
+              <span id="pageIndicator">0 / 0</span>
+              <button class="icon-btn" id="nextPage" disabled>→</button>
+            </div>
+            <div class="viewer-tools">
+              <button class="icon-btn" id="zoomOut" disabled>−</button>
+              <span id="zoomLabel">100%</span>
+              <button class="icon-btn" id="zoomIn" disabled>+</button>
+              <button class="icon-btn text-btn" id="fitBtn" disabled>Fit</button>
+            </div>
+          </div>
+
+          <div id="dropZone" class="drop-zone">
+            <div class="drop-card" id="emptyState">
+              <div class="drop-icon">⇧</div>
+              <h2>Drop a blueprint PDF here</h2>
+              <p>Pages are rendered and text is extracted on your own server. Nothing is guessed when a sheet, scale, note, or reference cannot be confirmed.</p>
+              <button class="btn coral" id="chooseFile">Choose PDF</button>
+            </div>
+            <div id="loadingState" class="loading-state" hidden>
+              <div class="spinner"></div>
+              <strong id="loadingTitle">Reading plan set…</strong>
+              <span id="loadingText">Rendering sheets and extracting blueprint text.</span>
+            </div>
+            <div id="imageStage" class="image-stage" hidden>
+              <img id="planImage" alt="Blueprint sheet" />
+            </div>
+          </div>
+        </div>
+
+        <aside class="inspector">
+          <div class="inspector-tabs">
+            <button class="inspect-tab active" data-tab="review">Review</button>
+            <button class="inspect-tab" data-tab="text">Sheet Text</button>
+            <button class="inspect-tab" data-tab="info">Sheet Info</button>
+          </div>
+
+          <div class="inspector-body">
+            <div id="reviewTab" class="inspect-pane active">
+              <div class="stat-row">
+                <div class="stat"><small>Open</small><strong id="openClarCount">0</strong></div>
+                <div class="stat"><small>Blocking</small><strong id="blockingCount">0</strong></div>
+                <div class="stat"><small>References</small><strong id="refCount">0</strong></div>
+              </div>
+
+              <div class="section-header">
+                <strong>Clarifications</strong>
+                <span id="clarificationLabel">None</span>
+              </div>
+              <div id="clarificationList" class="clar-list">
+                <div class="empty-small">Clarifications appear here only when information cannot be confirmed.</div>
+              </div>
+
+              <div class="section-header review-hits-head">
+                <strong>Relevant plan text</strong>
+                <span>Not interpreted yet</span>
+              </div>
+              <div id="reviewHits" class="review-hits">
+                <div class="empty-small">Upload a plan to inspect notes, schedules, engineered lumber terms, exclusions, and framing callouts.</div>
+              </div>
+            </div>
+
+            <div id="textTab" class="inspect-pane">
+              <div class="text-toolbar">
+                <strong>Extracted PDF text</strong>
+                <button class="mini-btn" id="copyText">Copy</button>
+              </div>
+              <pre id="sheetText">No sheet loaded.</pre>
+            </div>
+
+            <div id="infoTab" class="inspect-pane">
+              <div id="sheetInfo" class="info-grid">
+                <div class="empty-small">No sheet loaded.</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="bottom-drawer">
+        <div class="drawer-top">
+          <div>
+            <strong>Plan-set analysis</strong>
+            <span id="analysisStatus">Waiting for a PDF</span>
+          </div>
+          <div class="phase-pills">
+            <span class="phase active" id="phaseUpload">1 Upload</span>
+            <span class="phase" id="phaseRead">2 Read</span>
+            <span class="phase" id="phaseClarify">3 Clarify</span>
+            <span class="phase" id="phaseMeasure">4 Measure</span>
+          </div>
+        </div>
+        <div class="drawer-grid">
+          <div class="drawer-card"><small>Text-readable sheets</small><strong id="textPages">0</strong></div>
+          <div class="drawer-card"><small>Image-only sheets</small><strong id="imagePages">0</strong></div>
+          <div class="drawer-card"><small>Review text hits</small><strong id="hitCount">0</strong></div>
+          <div class="drawer-card"><small>Missing referenced sheets</small><strong id="missingRefCount">0</strong></div>
+          <div class="drawer-message" id="drawerMessage">Actual material quantities remain disabled until the plan-reading and clarification stage is complete.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal-wrap" hidden>
+    <div class="modal">
+      <button class="modal-x" id="modalClose">×</button>
+      <div class="modal-kicker">CLARIFICATION REQUIRED</div>
+      <h2 id="modalTitle">-</h2>
+      <p id="modalQuestion">-</p>
+      <div class="evidence" id="modalEvidence">-</div>
+      <label for="modalAnswer">Authoritative answer</label>
+      <textarea id="modalAnswer" placeholder="Enter exactly what should be used. Do not guess."></textarea>
+      <div class="modal-actions">
+        <button class="btn light" id="modalCancel">Keep open</button>
+        <button class="btn coral" id="modalResolve">Resolve with this answer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
