@@ -16,7 +16,6 @@ def _remove_routes() -> None:
     kept = []
     for route in app.router.routes:
         path = getattr(route, "path", None)
-        methods = getattr(route, "methods", set()) or set()
         if path in blocked_paths:
             continue
         kept.append(route)
@@ -47,7 +46,7 @@ _remove_routes()
 def index_with_plan_model():
     html_path = STATIC / "index.html"
     html = html_path.read_text(encoding="utf-8")
-    addon = '<script src="/static/plan-model-addon.js?v=2"></script>'
+    addon = '<script src="/static/plan-model-addon.js?v=3"></script>'
     if "plan-model-addon.js" not in html:
         html = html.replace("</body>", f"  {addon}\n</body>")
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
