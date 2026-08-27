@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import fitz  # PyMuPDF
+import pymupdf
 
-MODEL_VERSION = 2
+MODEL_VERSION = 3
 
 EWP_RE = re.compile(
     r"\b(?:I[- ]?JOISTS?|TJI\s*\d*[A-Z0-9-]*|BCI\s*\d*[A-Z0-9-]*|NI\s*\d+[A-Z0-9-]*|LVL|PSL|LSL|GLULAM|RIM\s+BOARD|EWP)\b",
@@ -38,6 +38,10 @@ DIM_RE = re.compile(
 )
 FEET_ONLY_RE = re.compile(r"(?<!\d)(\d+)\s*['’](?!\s*-)")
 TRUSS_TYPE_RE = re.compile(r"\b(?:GIRDER\s+)?TRUSS\s*['\"]?([A-Z])['\"]?\b", re.IGNORECASE)
+I_JOIST_FAMILY_RE = re.compile(
+    r"\b(?:TJI\s*\d*[A-Z0-9-]*|BCI\s*\d*[A-Z0-9-]*|NI\s*\d+[A-Z0-9-]*)\b",
+    re.IGNORECASE,
+)
 
 
 def now_iso() -> str:
@@ -137,8 +141,8 @@ def _member_role(raw: str, category: str) -> str:
         return "plate"
     if "JOIST" in up:
         return "joist"
-    # Common I-joist product families can be identified as joist products from the explicit token itself.
-    if category == "ewp_callout" and re.search(r"\b(?:TJI|BCI|NI\s*\d+)\b", up):
+    # Explicit I-joist product families are joists even when the word JOIST is omitted.
+    if category == "ewp_callout" and I_JOIST_FAMILY_RE.search(up):
         return "joist"
     if "LVL" in up or "PSL" in up or "LSL" in up:
         return "engineered_member_unspecified"
@@ -196,7 +200,7 @@ def _normalized(raw: str, category: str, sheet_title: str | None) -> dict[str, A
     return result
 
 
-def _line_records(page: fitz.Page) -> list[dict[str, Any]]:
+def _line_records(page: pymupdf.Page) -> list[dict[str, Any]]:
     data = page.get_text("dict")
     records: list[dict[str, Any]] = []
     for block in data.get("blocks", []):
@@ -256,7 +260,7 @@ def _apply_precedence(model: dict[str, Any]) -> None:
 
 
 def build_plan_model(pdf_path: Path, project: dict[str, Any]) -> dict[str, Any]:
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     pages_by_number = {p["page"]: p for p in project.get("pages", [])}
     model: dict[str, Any] = {
         "model_version": MODEL_VERSION,
